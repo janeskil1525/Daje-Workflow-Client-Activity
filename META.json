@@ -1,5 +1,5 @@
 {
-   "abstract" : "It's new $module",
+   "abstract" : "Create a client",
    "author" : [
       "janeskil1525 <janeskil1525@gmail.com>"
    ],
@@ -12,7 +12,7 @@
       "url" : "http://search.cpan.org/perldoc?CPAN::Meta::Spec",
       "version" : 2
    },
-   "name" : "Daje-Client-Create",
+   "name" : "Daje-Workflow-Client-Activity",
    "no_index" : {
       "directory" : [
          "t",
@@ -56,13 +56,13 @@
    "release_status" : "unstable",
    "resources" : {
       "bugtracker" : {
-         "web" : "https://github.com/janeskil1525/Daje-Client-Create/issues"
+         "web" : "https://github.com/janeskil1525/Daje-Workflow-Client-Activity/issues"
       },
-      "homepage" : "https://github.com/janeskil1525/Daje-Client-Create",
+      "homepage" : "https://github.com/janeskil1525/Daje-Workflow-Client-Activity",
       "repository" : {
          "type" : "git",
-         "url" : "https://github.com/janeskil1525/Daje-Client-Create.git",
-         "web" : "https://github.com/janeskil1525/Daje-Client-Create"
+         "url" : "https://github.com/janeskil1525/Daje-Workflow-Client-Activity.git",
+         "web" : "https://github.com/janeskil1525/Daje-Workflow-Client-Activity"
       }
    },
    "version" : "0.01",
