@@ -38,16 +38,20 @@ use Daje::Database::Model::CompaniesUsers;
 use Daje::Workflow::Database::Model::Workflow;
 use Daje::Workflow::Database::Model::Context;
 
-our $VERSION = "0.01";
+our $VERSION = "0.03";
 
 sub create_client($self) {
     try {
         $self->model->insert_history("New client will be created", "Daje::Workflow::Client::Activity");
         my $wfl = Daje::Workflow::Database::Model::Workflow->new(db => $self->db);
         my $user_pkey = $self->add_user($wfl);
-        my $companies_pkey = $self->add_company($wfl);
-        $self->add_user_company($user_pkey, $companies_pkey);
-        $self->model->insert_history("New client created", "Daje::Workflow::Client::Activity");
+        if ($self->error->has_error() ==0 ) {
+            my $companies_pkey = $self->add_company($wfl);
+            if ($self->error->has_error() ==0 ) {
+                $self->add_companies_users($companies_pkey, $user_pkey);
+                $self->model->insert_history("New client created", "Daje::Workflow::Client::Activity");
+            }
+        }
     } catch ($e) {
         $self->error->add_error("Adding client failed due to : '$e'");
     };
@@ -58,12 +62,13 @@ sub create_client($self) {
 sub add_companies_users($self, $companies_pkey, $users_pkey) {
     my $data->{companies_fkey} = $companies_pkey;
     $data->{users_fkey} = $users_pkey;
-    Daje::Database::Model::CompaniesUsers->new(
+    my $result = Daje::Database::Model::CompaniesUsers->new(
         db => $self->db
     )->insert_companies_users(
         $data
     );
-
+    $self->error->add_error($result->{error})
+        if exists $result->{error} and $result->{result} == 0;
 }
 
 sub add_company($self, $wfl) {
@@ -74,26 +79,40 @@ sub add_company($self, $wfl) {
     my $workflow_pkey = $wfl->save($workflow);
     $company->{workflow_fkey} = $workflow_pkey;
 
-    my $company_obj->Daje::Database::Model::Companies->new(
+    my $company_obj = Daje::Database::Model::Companies->new(
         db => $self->db
     );
     my $result = $company_obj->insert_companies($company);
-    $company->{companies_pkey} = $result->{companies_pkey};
+    $self->error->add_error($result->{error})
+        if exists $result->{error} and $result->{result} == 0;
+    if ($self->error->has_error() == 0) {
+        $company->{companies_pkey} = $result->{data}->{companies_pkey};
 
-    my $context->{context} = $company;
-    $context->{workflow_fkey} = $workflow_pkey;
+        my $context->{context} = $company;
+        $context->{workflow_fkey} = $workflow_pkey;
 
-    Daje::Workflow::Database::Model::Context->new(
-        db => $self->db
-    )->save(
-        $context
-    );
+        Daje::Workflow::Database::Model::Context->new(
+            db            => $self->db,
+            workflow_pkey => $workflow_pkey
+        )->save(
+            $context
+        );
+    }
 
-    return $result->{companies_pkey};
+    return $result->{data}->{companies_pkey};
 }
 
 sub add_user($self, $wfl) {
     my $user = $self->context()->{context}->{user};
+
+    my $user_obj = Daje::Database::Model::Users->new(
+        db => $self->db
+    );
+    my $existing_user = $user_obj->load_users_userid($user->{userid});
+
+    return $existing_user->{data}->{users_pkey} # User exists
+        unless exists $existing_user->{data}->{users_pkey}
+            and $existing_user->{data}->{users_pkey} > 0;
 
     my $workflow->{name} = "users";
     $workflow->{state} = "confirmationMail";
@@ -101,25 +120,28 @@ sub add_user($self, $wfl) {
     my $workflow_pkey = $wfl->save($workflow);
     $user->{workflow_fkey} = $workflow_pkey;
 
-    my $user_obj = Daje::Database::Model::Users->new(
-        db => $self->db
-    );
-    my $user_resp = $user_obj->insert_users($user);
-    $user->{users_pkey} = $user_resp->{users_pkey};
+    my $result = $user_obj->insert_users($user);
+    $self->error->add_error($result->{error})
+        if exists $result->{error} and $result->{result} == 0;
 
-    my $context->{context} = $user;
-    $context->{context}->{mail}->{to} = $user->{userid};
-    $context->{context}->{mail}->{template} = "ConfirmEmail";
-    $context->{context}->{mail}->{users_pkey} = $user_resp->{users_pkey};
-    $context->{workflow_fkey} = $workflow_pkey;
+    if ($self->error->has_error() == 0) {
+        $user->{users_pkey} = $result->{data}->{users_pkey};
 
-    Daje::Workflow::Database::Model::Context->new(
-        db => $self->db
-    )->save(
-        $context
-    );
+        my $context->{context} = $user;
+        $context->{context}->{mail}->{to} = $user->{userid};
+        $context->{context}->{mail}->{template} = "ConfirmEmail";
+        $context->{context}->{mail}->{users_pkey} = $result->{data}->{users_pkey};
+        $context->{workflow_fkey} = $workflow_pkey;
 
-    return $user_resp->{users_pkey};
+        Daje::Workflow::Database::Model::Context->new(
+            db            => $self->db,
+            workflow_pkey => $workflow_pkey,
+        )->save(
+            $context
+        );
+    }
+
+    return $result->{data}->{users_pkey};
 }
 
 1;
